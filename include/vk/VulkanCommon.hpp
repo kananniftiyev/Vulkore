@@ -4,6 +4,7 @@
 #include "vk_mem_alloc.h"
 #include <vector>
 #include <iostream>
+#include <array>
 
 #define VK_CHECK(x)                                                     \
     do                                                                  \
@@ -64,10 +65,12 @@ namespace VK
         VmaAllocator allocator;
 
         VkRenderPass renderpass;
+        VkRenderPass ui_renderpass;
         std::vector<VkFramebuffer> framebuffers;
+        std::vector<VkFramebuffer> ui_framebuffers;
 
         int framecount = 0;
-        FrameData frames[FRAME_OVERLAP];
+        std::array<FrameData, FRAME_OVERLAP> frames;
         FrameData &getCurrFrame() { return frames[framecount % FRAME_OVERLAP]; }
     };
 } // namespace VK

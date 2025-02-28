@@ -15,7 +15,19 @@
 namespace VK::UI
 {
 
-    void initImgui(GLFWwindow *window, ImguiContext &context, VulkanContext &vulkan);
+    // DATAS
+    struct DiagnosticData
+    {
+        int fps;
+        float awake_ms;
+        float start_ms;
+        float update_ms;
+    };
+
+    VK::ImguiContext initImgui(GLFWwindow *window, VulkanContext &vulkan);
     void drawImgui(ImguiContext &context, VkCommandBuffer cmd);
     void shutdownImgui(ImguiContext &context, VulkanContext &vulkan);
+
+    // windows
+    void diagnosticWindow(DiagnosticData &data);
 } // namespace Vulkan

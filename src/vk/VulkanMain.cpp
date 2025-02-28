@@ -1,6 +1,8 @@
 #define VMA_IMPLEMENTATION
 #include "vk/VulkanMain.hpp"
 
+static bool pause_scene = false;
+
 VK::VulkanContext VK::initVulkan(GLFWwindow *&window)
 {
     VulkanContext context{};
@@ -42,6 +44,7 @@ VK::VulkanContext VK::initVulkan(GLFWwindow *&window)
             throw std::runtime_error("Failed to create window surface: " + std::to_string(result));
         }
     }
+
     vkb::PhysicalDeviceSelector selector{vkb_inst};
     auto physical_device = selector.set_minimum_version(1, 3)
                                .set_surface(context.surface)
@@ -144,7 +147,7 @@ VK::VulkanContext VK::initVulkan(GLFWwindow *&window)
     color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
     color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    color_attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference color_attachment_ref = {};
     color_attachment_ref.attachment = 0;
@@ -206,29 +209,84 @@ VK::VulkanContext VK::initVulkan(GLFWwindow *&window)
 
     VK_CHECK(vkCreateRenderPass(context.device, &render_pass_info, nullptr, &context.renderpass));
 
+    // Imgui Renderpass
+    VkAttachmentDescription imgui_color_attachment{};
+    imgui_color_attachment.format = context.swapchain_format;
+    imgui_color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    imgui_color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD; // Load existing color
+    imgui_color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+    imgui_color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    imgui_color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+
+    imgui_color_attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    imgui_color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkAttachmentReference imgui_color_attachment_ref = {};
+    imgui_color_attachment_ref.attachment = 0;
+    imgui_color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    // No depth attachment since ImGui does not need it
+
+    VkSubpassDescription imgui_subpass = {};
+    imgui_subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    imgui_subpass.colorAttachmentCount = 1;
+    imgui_subpass.pColorAttachments = &imgui_color_attachment_ref;
+
+    VkSubpassDependency imgui_dependency = {};
+    imgui_dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    imgui_dependency.dstSubpass = 0;
+    imgui_dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    imgui_dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    imgui_dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    imgui_dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    VkRenderPassCreateInfo imgui_render_pass_info{};
+    imgui_render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    imgui_render_pass_info.attachmentCount = 1;
+    imgui_render_pass_info.pAttachments = &imgui_color_attachment;
+    imgui_render_pass_info.subpassCount = 1;
+    imgui_render_pass_info.pSubpasses = &imgui_subpass;
+    imgui_render_pass_info.dependencyCount = 1;
+    imgui_render_pass_info.pDependencies = &imgui_dependency;
+
+    VK_CHECK(vkCreateRenderPass(context.device, &imgui_render_pass_info, nullptr, &context.ui_renderpass));
+
     // Frame Buffers
     VkFramebufferCreateInfo fb_info{};
     fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
     fb_info.pNext = nullptr;
 
-    fb_info.renderPass = context.renderpass;
-    fb_info.attachmentCount = 1;
     fb_info.width = context.swapchain_extend.width;
     fb_info.height = context.swapchain_extend.height;
     fb_info.layers = 1;
 
     const uint32_t swapchain_image_count = context.swapchain_images.size();
     context.framebuffers = std::vector<VkFramebuffer>(swapchain_image_count);
+    context.ui_framebuffers = std::vector<VkFramebuffer>(swapchain_image_count);
 
     for (int i = 0; i < swapchain_image_count; i++)
     {
-        VkImageView attachments[2];
-        attachments[0] = context.swapchain_image_view[i];
-        attachments[1] = context.depth_image_view;
-        fb_info.pAttachments = attachments;
-        fb_info.attachmentCount = 2;
+        VkImageView attachments_main[2] = {context.swapchain_image_view[i], context.depth_image_view};
+        VkImageView attachments_imgui[1] = {context.swapchain_image_view[i]};
 
+        VkFramebufferCreateInfo fb_info{};
+        fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        fb_info.width = context.swapchain_extend.width;
+        fb_info.height = context.swapchain_extend.height;
+        fb_info.layers = 1;
+
+        // Framebuffer for Main Render Pass
+        fb_info.renderPass = context.renderpass;
+        fb_info.attachmentCount = 2;
+        fb_info.pAttachments = attachments_main;
         VK_CHECK(vkCreateFramebuffer(context.device, &fb_info, nullptr, &context.framebuffers[i]));
+
+        // Framebuffer for ImGui Render Pass
+        fb_info.renderPass = context.ui_renderpass;
+        fb_info.attachmentCount = 1;
+        fb_info.pAttachments = attachments_imgui;
+        VK_CHECK(vkCreateFramebuffer(context.device, &fb_info, nullptr, &context.ui_framebuffers[i]));
     }
 
     return context;
@@ -268,33 +326,41 @@ void VK::draw(VulkanContext &context, ImguiContext &imgui)
 
     recordCommand(cmd, [&]
                   {
-                      VkClearValue clearValue;
-                      clearValue.color = {{0.0f, 0.0f, 0.0f, 0.0f}};
-
-                      VkClearValue depthClear;
-                      depthClear.depthStencil.depth = 1.f;
-                      VkClearValue clearValues[] = {clearValue, depthClear};
-                      auto renderpass_info = VK::Info::createRenderPassInfo(context.renderpass, context.framebuffers[swapchainIndex], clearValues, context.swapchain_extend);
-
-                      vkCmdBeginRenderPass(cmd, &renderpass_info, VK_SUBPASS_CONTENTS_INLINE);
-                        // Objects here
-                        
-                      vkCmdEndRenderPass(cmd); });
+                VkClearValue clearValue;
+                clearValue.color = {{0.1f, 0.1f, 0.05f, 1.0f}};
+    
+                VkClearValue depthClear;
+                depthClear.depthStencil.depth = 1.f;
+                VkClearValue clearValues[] = {clearValue, depthClear};
+                auto renderpass_info = VK::Info::createRenderPassInfo(context.renderpass, context.framebuffers[swapchainIndex], clearValues, context.swapchain_extend);
+    
+                vkCmdBeginRenderPass(cmd, &renderpass_info, VK_SUBPASS_CONTENTS_INLINE);
+                  
+                vkCmdEndRenderPass(cmd); });
 
     recordCommand(ui_cmd, [&]
                   {
                             VkClearValue clearValue;
                             clearValue.color = {{0.0f, 0.0f, 0.0f, 0.0f}};
-      
-                            VkClearValue depthClear;
-                            depthClear.depthStencil.depth = 1.f;
-                            VkClearValue clearValues[] = {clearValue, depthClear};
-                            auto renderpass_info = VK::Info::createRenderPassInfo(context.renderpass, context.framebuffers[swapchainIndex], clearValues, context.swapchain_extend);
-      
-                            vkCmdBeginRenderPass(ui_cmd, &renderpass_info, VK_SUBPASS_CONTENTS_INLINE);
-                              
-                           VK::UI::drawImgui(imgui, ui_cmd); 
-                              
+
+
+                            VkRenderPassBeginInfo info{};
+
+                                info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                                info.renderPass = context.ui_renderpass;
+                                info.framebuffer = context.ui_framebuffers[swapchainIndex];
+                                info.clearValueCount = 1;
+                                info.pClearValues = &clearValue;
+                                info.renderArea.offset.x = 0;
+                                info.renderArea.offset.y = 0;
+                                info.renderArea.extent = context.swapchain_extend;
+
+
+
+                            vkCmdBeginRenderPass(ui_cmd, &info, VK_SUBPASS_CONTENTS_INLINE);
+
+                           VK::UI::drawImgui(imgui, ui_cmd);
+
                             vkCmdEndRenderPass(ui_cmd); });
 
     static VkCommandBuffer cmds[2] = {cmd, ui_cmd};
@@ -333,6 +399,13 @@ void VK::shutdown(VulkanContext &context)
     {
         vkDestroyFramebuffer(context.device, framebuffer, nullptr);
     }
+
+    for (auto &framebuffer : context.ui_framebuffers)
+    {
+        vkDestroyFramebuffer(context.device, framebuffer, nullptr);
+    }
+
+    vkDestroyRenderPass(context.device, context.ui_renderpass, nullptr);
 
     vkDestroyRenderPass(context.device, context.renderpass, nullptr);
 

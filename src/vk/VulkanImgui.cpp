@@ -1,7 +1,8 @@
 #include "vk/VulkanImgui.hpp"
 
-void VK::UI::initImgui(GLFWwindow *window, ImguiContext &context, VulkanContext &vulkan)
+VK::ImguiContext VK::UI::initImgui(GLFWwindow *window, VulkanContext &vulkan)
 {
+    VK::ImguiContext context{};
 
     // Descriptor
     VkDescriptorPoolSize pool_sizes[] =
@@ -44,11 +45,13 @@ void VK::UI::initImgui(GLFWwindow *window, ImguiContext &context, VulkanContext 
     init_info.PipelineRenderingCreateInfo = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
     init_info.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
     init_info.PipelineRenderingCreateInfo.pColorAttachmentFormats = &vulkan.swapchain_format;
-    init_info.RenderPass = vulkan.renderpass;
+    init_info.RenderPass = vulkan.ui_renderpass;
 
     ImGui_ImplVulkan_Init(&init_info);
 
     ImGui_ImplVulkan_CreateFontsTexture();
+
+    return context;
 }
 
 // TODO: Diagnotstic window
@@ -60,17 +63,14 @@ void VK::UI::drawImgui(ImguiContext &context, VkCommandBuffer cmd)
     ImGui_ImplGlfw_NewFrame(); // Assuming you're using GLFW
     ImGui::NewFrame();         // This sets up the internal state for ImGui
 
-    if (ImGui::Begin("Profiler"))
-    {
-
-        // Section 2: Closable section
-        if (ImGui::CollapsingHeader("Diagnostics", ImGuiTreeNodeFlags_AllowItemOverlap))
-        {
-            ImGui::Text("This is a closable section. You can add more content here.");
-        }
-
-        ImGui::End();
-    }
+    // windows here:
+    DiagnosticData data{
+        .fps = 60,
+        .awake_ms = 5.0f,
+        .start_ms = 5.0f,
+        .update_ms = 5.0f,
+    };
+    diagnosticWindow(data);
 
     ImGui::Render();
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
@@ -86,4 +86,21 @@ void VK::UI::shutdownImgui(ImguiContext &context, VulkanContext &vulkan)
     ImGui::DestroyContext();
 
     vkDestroyDescriptorPool(vulkan.device, context.descriptor_pool, nullptr);
+}
+
+void VK::UI::diagnosticWindow(DiagnosticData &data)
+{
+    if (ImGui::Begin("Profiler"))
+    {
+
+        if (ImGui::CollapsingHeader("Diagnostics", ImGuiTreeNodeFlags_AllowItemOverlap))
+        {
+            ImGui::Text("FPS: %d", data.fps);
+            ImGui::Text("Awake: %f", data.awake_ms);
+            ImGui::Text("Start: %f", data.start_ms);
+            ImGui::Text("Update: %f", data.update_ms);
+        }
+
+        ImGui::End();
+    }
 }

@@ -20,6 +20,7 @@ struct Mesh
 
 struct Object : IDrawable
 {
+    uint16_t id;
     std::string name;
     std::vector<Mesh> vertecies;
     std::vector<unsigned int> indices;
@@ -38,12 +39,15 @@ struct Object : IDrawable
 class ObjectManager
 {
 private:
-    /* data */
+    std::vector<Object> objects;
+
 public:
-    ObjectManager(/* args */);
+    ObjectManager();
     ~ObjectManager();
 
-    bool addObject();
-    bool removeObject();
+    bool addObject(Object &object);
+    bool removeObject(uint16_t id);
     bool readObjectsFromFile();
+
+    void renderObjects();
 };

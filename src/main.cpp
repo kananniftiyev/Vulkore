@@ -5,16 +5,9 @@
 
 int main()
 {
-    Renderer::RendererContext renderer{};
-
-    Renderer::initWindow(renderer, 800, 600);
-
-    if (renderer.window == nullptr)
-    {
-        std::cout << "/* message */" << std::endl;
-        return -1;
-    }
-
-    Renderer::mainloop(renderer);
-    Renderer::shutdown(renderer);
+    Renderer renderer{};
+    renderer.Awake();
+    renderer.Start();
+    renderer.Update();
+    renderer.Shutdown();
 }

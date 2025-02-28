@@ -5,25 +5,40 @@
 #include "vk/VulkanMain.hpp"
 #include "vk/VulkanImgui.hpp"
 #include "vk/VulkanCommon.hpp"
+#include "vk/VulkanWindow.hpp"
 #include <chrono>
 
-struct VulkanContext;
+#define RUN_MAIN_LOOP(window)              \
+    while (!glfwWindowShouldClose(window)) \
+    {                                      \
+                                           \
+        glfwPollEvents();                  \
+    }
 
-namespace Renderer
+struct RendererContext
 {
-    struct RendererContext
-    {
-        bool HDR = false;
-        bool fullscreen = false;
-        GLFWwindow *window;
+    VK::VulkanContext vulkan;
+    VK::ImguiContext imgui;
+    VK::Window::WindowContext window;
+};
 
-        VK::VulkanContext vulkan;
-        VK::ImguiContext imgui;
-    };
+class Renderer
+{
+private:
+    RendererContext context;
 
-    // TODO: Fullscreen
-    void initWindow(RendererContext &context, uint32_t width, uint32_t height);
-    void mainloop(RendererContext &context);
-    void shutdown(RendererContext &context);
+public:
+    Renderer();
 
-} // namespace Renderer
+    /// @brief This function run before *Start*, where vulkan and window initialized. Awake func is good for configs and etc.
+    void Awake();
+
+    /// @brief Start function runs right before main loop. This function is good for object creating or memory allocations before starting drawing.
+    void Start();
+
+    /// @brief Update function is runing every frame. This is where render and logic happens.
+    void Update();
+
+    /// @brief Cleanup function for created stuff at start of program.
+    void Shutdown();
+};

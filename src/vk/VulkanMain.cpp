@@ -5,12 +5,14 @@ static bool pause_scene = false;
 
 VK::VulkanContext VK::initVulkan(GLFWwindow *&window)
 {
+
+
     VulkanContext context{};
     vkb::InstanceBuilder builder;
 
     auto inst_ret = builder.set_app_name("Vulkan")
                         .enable_validation_layers(true)
-                        .require_api_version(1, 3, 0)
+                        .require_api_version(1, 2, 0)
                         .use_default_debug_messenger()
                         .build();
 
@@ -29,6 +31,7 @@ VK::VulkanContext VK::initVulkan(GLFWwindow *&window)
         throw std::runtime_error("Vulkan instance is null");
     }
 
+
     context.surface = VK_NULL_HANDLE;
 
     VkResult result = glfwCreateWindowSurface(context.instance, window, nullptr, &context.surface);
@@ -46,7 +49,7 @@ VK::VulkanContext VK::initVulkan(GLFWwindow *&window)
     }
 
     vkb::PhysicalDeviceSelector selector{vkb_inst};
-    auto physical_device = selector.set_minimum_version(1, 3)
+    auto physical_device = selector.set_minimum_version(1, 2)
                                .set_surface(context.surface)
                                .select()
                                .value();
@@ -67,6 +70,7 @@ VK::VulkanContext VK::initVulkan(GLFWwindow *&window)
     allocator_info.device = context.device;
     allocator_info.instance = context.instance;
     VK_CHECK(vmaCreateAllocator(&allocator_info, &context.allocator));
+
 
     // Swapchain
 

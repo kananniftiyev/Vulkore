@@ -3,6 +3,10 @@ project(Vulkore VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_DEPENDS_GRAPHVIZ "deps.dot")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(CMAKE_TOOLCHAIN_FILE "C:/Users/Kanan/Desktop/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "vcpkg toolchain file" FORCE)
 
 
 
@@ -32,13 +36,49 @@ FetchContent_Declare(
   GIT_TAG        master
 )
 
+
+
 FetchContent_MakeAvailable(imgui)
 FetchContent_MakeAvailable(vk-bootstrap)
 FetchContent_MakeAvailable(VulkanMemoryAllocator)
 
-find_package(glfw3 REQUIRED)
-find_package(Vulkan REQUIRED)
-find_package(glm REQUIRED)
+
+
+if(UNIX)
+    find_package(glfw3 REQUIRED)
+    find_package(Vulkan REQUIRED)
+    find_package(glm REQUIRED)
+endif(UNIX)
+
+if(WIN32)
+    FetchContent_Declare(
+      GLM 
+      GIT_REPOSITORY https://github.com/g-truc/glm.git
+      GIT_TAG        master
+    )
+
+    FetchContent_Declare(
+      GLFW 
+      GIT_REPOSITORY https://github.com/glfw/glfw.git
+      GIT_TAG        master
+    )
+
+FetchContent_MakeAvailable(GLM)
+FetchContent_MakeAvailable(GLFW)
+
+set(VULKAN_SDK "C:/VulkanSDK/1.4.304.1")
+
+include_directories("${VULKAN_SDK}/Include")
+
+    link_directories("${VULKAN_SDK}/Lib")
+     link_directories("${VULKAN_SDK}/Lib")
+
+    # Set Vulkan library for Windows
+    set(VULKAN_LIB "${VULKAN_SDK}/Lib/vulkan-1.lib")
+    include_directories("${GLFW_SOURCE_DIR}/include")
+
+endif(WIN32)
+
 
 
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/*.cpp)
@@ -58,14 +98,14 @@ add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-    ${IMGUI_BACKENDS}  # Add backend sources
+    ${IMGUI_BACKENDS}  
 )
 
 include_directories(include)
 
 target_include_directories(imgui PUBLIC
     ${imgui_SOURCE_DIR}
-    ${imgui_SOURCE_DIR}/backends  # Important: Backends need this!
+    ${imgui_SOURCE_DIR}/backends  
 )
 
 target_include_directories(Vulkore PRIVATE
@@ -77,10 +117,20 @@ target_include_directories(Vulkore PRIVATE
     ${imgui_SOURCE_DIR}/backends
 )
 
+
 target_link_libraries(Vulkore PRIVATE
     glfw
-    Vulkan::Vulkan
     vk-bootstrap
     VulkanMemoryAllocator
     imgui
 )
+
+if(WIN32)
+    target_link_libraries(Vulkore PRIVATE ${VULKAN_LIB})
+endif(WIN32)
+
+
+if(UNIX)
+ target_link_libraries(Vulkore PRIVATE     Vulkan::Vulkan
+)
+endif(UNIX)
